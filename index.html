@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Document</title>
+        <style>
+            /* Table Head */
+            #table thead th {
+                background-color: rgb(81, 130, 187);
+                color: #fff;
+                border-bottom-width: 0;
+            }
+
+            /* Column Style */
+            #table td {
+                color: #000;
+            }
+            /* Heading and Column Style */
+            #table tr, #table th {
+                border-width: 1px;
+                border-style: solid;
+                border-color: rgb(81, 130, 187);
+            }
+
+            span {
+                font-family: Microsoft JhengHei;
+            }
+
+            /* Padding and font style */
+            #table td, #table th {
+                padding: 5px 10px;
+                font-size: 12px;
+                font-family: Microsoft JhengHei;
+                font-weight: bold;
+            }
+        </style>
+        <script src="/js/FileSaver.js"></script>
+        <script src="/js/prototype.min.js"></script>
+        <script>
+            window.onload = function () {
+                var dataMaxMin = {
+                    init: function(){
+                        dataMaxMin['Difference'] = {max: Number.MIN_VALUE, min: Number.MAX_VALUE, avg: 0};
+                        dataMaxMin['Bump diameter'] = {max: Number.MIN_VALUE, min: Number.MAX_VALUE, avg: 0};
+                    },
+                    'Difference': null,
+                    'Bump diameter': null
+                };
+                var title = 'Date,Time,EquipmentID,Operator,Recipe,Lot,Inspection Mode,Groups Defined,Regions Defined,Seq Nbr,Passed,Nb Total Connectors,Nb Missing Connectors,Nb Not Located Connectors,Nb Connectors Measured for Height [Bump070_Fl_MCM0],Height Avg [Bump070_Fl_MCM0](um),Height Stand. Dev. [Bump070_Fl_MCM0](um),Height Min [Bump070_Fl_MCM0](um),Height Max [Bump070_Fl_MCM0](um),Nb Height Failed [Bump070_Fl_MCM0],Nb Connectors Measured for Top Diameter [Bump070_Fl_MCM0],Top Diameter Avg [Bump070_Fl_MCM0](um),Top Diameter Stand. Dev. [Bump070_Fl_MCM0](um),Top Diameter Min [Bump070_Fl_MCM0](um),Top Diameter Max [Bump070_Fl_MCM0](um),Nb Top Diameter Failed [Bump070_Fl_MCM0],Top Diameter Span [Bump070_Fl_MCM0](um),Failed Connector Defect [Bump070_Fl_MCM0],Coplanarity [Part](um),Failed Bridge Defect';
+                var titleIndex = (function(){
+                    var index = {};
+                    var titleArray = title.split(',');
+                    for (i = 0, end = titleArray.length; i < end; i++) {
+                        index[titleArray[i]] = i;
+                    }
+                    return index;
+                })();
+                window.addEventListener("dragover", function (e) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "copy";
+                });
+                window.addEventListener("drop", function (e) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    $previewTable.select('tr:not(tr:first)').forEach(function(item){
+                        $(item).remove();
+                    });
+                    actions.rawData = [];
+                    var files = e.dataTransfer.files;
+                    // do something upload
+                    for (i = 0, end = files.length; i < end; i++) {
+                        actions.readFiles(files[i]);
+                    }
+                });
+
+                var csvUtils = {
+                    rawdataTitle: {},
+                    getData: function(line, key){
+                        if (csvUtils.rawdataTitle[key] == null) {
+                            return '';
+                        }
+                        return line[csvUtils.rawdataTitle[key]];
+                    },
+                    setData: function(newLine, key, data){
+                        var index = titleIndex[key];
+                        if (titleIndex[key] == null) {
+                            return;
+                        }
+                        newLine[index] = data;
+                    },
+                    getRowStr: function(rawData) {
+                        var str = '';
+                        for (i = 0, end = rawData.length; i < end; i++) {
+                            str += (rawData[i] == null ? '' : rawData[i]) + ',';
+                        }
+                        str = str.substring(0, str.length - 1);
+                        return str;
+                    },
+                    refreshMinMax: function(data, key){
+                        var obj = dataMaxMin[key];
+                        var max = obj.max;
+                        var min = obj.min;
+                        obj.max = data > max ? data : max;
+                        obj.min = data < min ? data : min;
+                    }
+                }
+
+               var actions = {
+                    rawData : []
+                    ,
+                    readFiles: function (file) {
+                        var reader = new FileReader();
+                        reader.onload = function () {
+                            dataMaxMin.init();
+                            var lines = reader.result.split('\r\n');
+                            var date = lines[0].substr(5).split('/ ');
+                            var line1 = lines[1].split(',');
+                            var sn = line1[2];
+                            sn = sn.substr('Inspection No.'.length);
+                            sn = parseInt(sn);
+                            var recipe = line1[0];
+                            recipe = recipe.substring('Recipe name: '.length, recipe.indexOf('_'));
+                            var titleCache = csvUtils.rawdataTitle;
+                            (function(){
+                                if (Object.keys(titleCache).length == 0) {
+                                    var title = lines[3].split(',');
+                                    for (index in title) {
+                                        csvUtils.rawdataTitle[title[index]] = index;
+                                    }
+                                }
+                            })();
+                            var total = 0;
+                            var size = '';
+                            for (i = 4, end = lines.length; i < end; i++){
+                                //逐筆讀取
+                                var data = lines[i].split(',');
+                                var difference = csvUtils.getData(data, 'Difference');
+                                var bumpDiameter = csvUtils.getData(data, 'Bump diameter');
+                                var bumpNo = csvUtils.getData(data, 'Bump No.');
+                                csvUtils.refreshMinMax(difference, 'Difference');
+                                csvUtils.refreshMinMax(bumpDiameter, 'Bump diameter');
+                                var floatDiff = parseFloat(difference);
+                                var floatDiam = parseFloat(bumpDiameter);
+                                dataMaxMin['Difference'].avg += isNaN(floatDiff) ? 0 : floatDiff;
+                                dataMaxMin['Bump diameter'].avg += isNaN(floatDiam) ? 0 : floatDiam;
+                                size = (bumpNo == '' || bumpNo == null) ? size : bumpNo;
+                            }
+                            dataMaxMin['Difference'].avg /= size;
+                            dataMaxMin['Bump diameter'].avg /= size;
+                            console.log(dataMaxMin);
+                            var newLine = new Array(title.length);
+                            csvUtils.setData(newLine, 'Date', date[0]);
+                            csvUtils.setData(newLine, 'Time', date[1]);
+                            csvUtils.setData(newLine, 'Recipe', recipe);
+                            csvUtils.setData(newLine, 'Seq Nbr', sn);
+                            csvUtils.setData(newLine, 'Height Avg [Bump070_Fl_MCM0](um)', dataMaxMin['Difference'].avg);
+                            csvUtils.setData(newLine, 'Height Min [Bump070_Fl_MCM0](um)', dataMaxMin['Difference'].min);
+                            csvUtils.setData(newLine, 'Height Max [Bump070_Fl_MCM0](um)', dataMaxMin['Difference'].max);
+                            csvUtils.setData(newLine, 'Top Diameter Avg [Bump070_Fl_MCM0](um)', dataMaxMin['Bump diameter'].avg);
+                            csvUtils.setData(newLine, 'Top Diameter Min [Bump070_Fl_MCM0](um)', dataMaxMin['Bump diameter'].min);
+                            csvUtils.setData(newLine, 'Top Diameter Max [Bump070_Fl_MCM0](um)', dataMaxMin['Bump diameter'].max);
+                            csvUtils.setData(newLine, 'Nb Total Connectors', size);
+                            csvUtils.setData(newLine, 'Nb Connectors Measured for Height [Bump070_Fl_MCM0]', size);
+                            actions.rawData.push(newLine);
+                            var $newTr = new Element('tr');
+                            Object.keys(titleIndex).forEach(function(item, idx){
+                                $newTr.insert(new Element('td', {align: 'center'}).update((newLine[idx] == null ? '' : newLine[idx])));
+                            });
+                            $previewTable.insert($newTr);
+                        };
+                        reader.readAsBinaryString(file);
+                    },
+                    saveFile: function () {
+                        var content = title + '\r\n';
+                        var rawData = actions.rawData;
+                        for (i in rawData) {
+                            content +=  csvUtils.getRowStr(rawData[i]) + '\r\n';
+                        }
+                        content = content.substring(0, content.length - '\r\n'.length);
+                        var blob = new Blob([content], {
+                            type: "text/plain;charset=utf-8",
+                        });
+                        saveAs(blob, "detail.csv");
+                    },
+                };
+                var $previewTable = $('table');
+                var $tr = $previewTable.select('tr:first')[0];
+                Object.keys(titleIndex).forEach(function(item, idx){
+                    $tr.insert(new Element('th').update(item));
+                });
+                $('btn_donwload').observe('click', actions.saveFile);
+            };
+        </script>
+    </head>
+    <body>
+        <span>請直接拖曳(多個)檔案至本視窗，合併過後的結果如下：<button type="button" id="btn_donwload">下載</button><br><br></span>
+        <table class="table" id="table">
+            <tr>
+
+            </tr>
+        </table>
+    </body>
+</html>
