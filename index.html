@@ -35,8 +35,8 @@
                 font-weight: bold;
             }
         </style>
-        <script src="/js/FileSaver.js"></script>
-        <script src="/js/prototype.min.js"></script>
+        <script src="./js/FileSaver.js"></script>
+        <script src="./js/prototype.min.js"></script>
         <script>
             window.onload = function () {
                 var dataMaxMin = {
@@ -71,7 +71,7 @@
                     var files = e.dataTransfer.files;
                     // do something upload
                     for (i = 0, end = files.length; i < end; i++) {
-                        actions.readFiles(files[i]);
+                        actions.readFiles(files[i], (i == files.length - 1 ? true : false) );
                     }
                 });
 
@@ -110,7 +110,7 @@
                var actions = {
                     rawData : []
                     ,
-                    readFiles: function (file) {
+                    readFiles: function (file, last) {
                         var reader = new FileReader();
                         reader.onload = function () {
                             dataMaxMin.init();
@@ -149,7 +149,6 @@
                             }
                             dataMaxMin['Difference'].avg /= size;
                             dataMaxMin['Bump diameter'].avg /= size;
-                            console.log(dataMaxMin);
                             var newLine = new Array(title.length);
                             csvUtils.setData(newLine, 'Date', date[0]);
                             csvUtils.setData(newLine, 'Time', date[1]);
@@ -164,13 +163,32 @@
                             csvUtils.setData(newLine, 'Nb Total Connectors', size);
                             csvUtils.setData(newLine, 'Nb Connectors Measured for Height [Bump070_Fl_MCM0]', size);
                             actions.rawData.push(newLine);
-                            var $newTr = new Element('tr');
-                            Object.keys(titleIndex).forEach(function(item, idx){
-                                $newTr.insert(new Element('td', {align: 'center'}).update((newLine[idx] == null ? '' : newLine[idx])));
-                            });
-                            $previewTable.insert($newTr);
+                            if (last) {
+                                var idx = titleIndex['Seq Nbr'];
+                                actions.rawData = actions.rawData = actions.rawData.sort(function(a, b) {
+                                    var snA = a[idx]; // ignore upper and lowercase
+                                    var snB = b[idx]; // ignore upper and lowercase
+                                    if (snA < snB) {
+                                        return -1;
+                                    }
+                                    if (snA > snB) {
+                                        return 1;
+                                    }
+                                    // names must be equal
+                                    return 0;
+                                });
+                                for (i = 0, end = actions.rawData.length; i < end; i++) {
+                                    var $newTr = new Element('tr');
+                                    var nowData = actions.rawData[i];
+                                    Object.keys(titleIndex).forEach(function(item, idx){
+                                        $newTr.insert(new Element('td', {align: 'center'}).update((nowData[idx] == null ? '' : nowData[idx])));
+                                    });
+                                    $previewTable.insert($newTr);
+                                }
+                                
+                            }
                         };
-                        reader.readAsBinaryString(file);
+                        reader.readAsText(file);
                     },
                     saveFile: function () {
                         var content = title + '\r\n';
